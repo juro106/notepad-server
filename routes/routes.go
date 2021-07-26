@@ -15,6 +15,7 @@ func Setup(app *fiber.App) {
 	api.Post("post-content", controllers.PostContent)
 	api.Post("get-content", controllers.GetContent)
 	api.Post("get-contents-all", controllers.GetContentsAll)
+	api.Post("get-related", controllers.GetRelated)
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Hello Fiber!")
