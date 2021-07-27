@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"notepad/database"
 	"notepad/models"
@@ -182,6 +183,49 @@ func GetRelated(ctx *fiber.Ctx) error {
 	}
 }
 
+func GetRelatedOnly(ctx *fiber.Ctx) error {
+	db := database.DbConn()
+	var tags models.Tags
+	if err := ctx.BodyParser(&tags); err != nil {
+		log.Println(err)
+	}
+	// 最終的に返す json
+	var tagMapList []map[string][]JsonObject
+	for _, v := range tags.Tags {
+		var jslist []JsonObject
+		p, err := db.Prepare(`SELECT data FROM posts3 WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`)
+		if err != nil {
+			log.Println(err)
+		}
+		defer p.Close()
+		tag := `"` + v + `"` // -上手くいった。多分 「'」が不要なのだろう
+		rows, err := p.Query(tag)
+		if err != nil {
+			log.Println(err)
+		}
+		defer rows.Close()
+		// tagHead := JsonObject{
+		// 	"user":    "tagName",
+		// 	"title":   v,
+		// 	"slug":    v,
+		// 	"content": "",
+		// }
+		// jslist = append(jslist, tagHead)
+		for rows.Next() {
+			var j JsonObject
+			if err := rows.Scan(&j); err != nil {
+				log.Println(err)
+			}
+			jslist = append(jslist, j)
+		}
+		tagMap := map[string][]JsonObject{v: jslist}
+		tagMapList = append(tagMapList, tagMap)
+	}
+
+	fmt.Printf("######\n\ntagMapList: %+v\n", tagMapList)
+	return ctx.JSON(tagMapList)
+}
+
 func PostContent(ctx *fiber.Ctx) error {
 	db := database.DbConn()
 	var content models.Content
@@ -287,4 +331,32 @@ func Post(ctx *fiber.Ctx) error {
 	fmt.Println(ret)
 
 	return ctx.JSON(member)
+}
+
+func DeleteContent(ctx *fiber.Ctx) error {
+	db := database.DbConn()
+	var slug models.Slug
+
+	if err := ctx.BodyParser(&slug); err != nil {
+		log.Println(err)
+		return err
+	}
+	p, err := db.Prepare(`DELETE FROM posts3 WHERE slug = ?`)
+	if err != nil {
+		log.Println(err)
+	}
+	defer p.Close()
+
+	p.Exec(slug.Slug)
+	if err != nil {
+		log.Println(err)
+		return err
+	} else {
+		t := fmt.Sprintf("%s", time.Now())
+		message := models.Message{
+			UpdatedAt: t,
+			Message:   "success",
+		}
+		return ctx.JSON(message)
+	}
 }
