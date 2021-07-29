@@ -44,25 +44,38 @@ func (j JsonObject) Value() (driver.Value, error) {
 
 func GetContent(ctx *fiber.Ctx) error {
 	db := database.DbConn()
-	var slug models.Slug
+	var query models.Query
 
-	if err := ctx.BodyParser(&slug); err != nil {
+	if err := ctx.BodyParser(&query); err != nil {
 		log.Println(err)
 		return err
 	}
+	// fmt.Println("query", query)
 	var j JsonObject
-	err := db.QueryRow(`SELECT data FROM posts3 WHERE slug = ?`, slug.Slug).Scan(&j)
+	// table := "posts3"
+	stmt := `SELECT data FROM ` + query.Uid + ` WHERE slug = ?`
+	// fmt.Println(stmt)
+	err := db.QueryRow(stmt, query.Slug).Scan(&j)
 	if err != nil {
 		log.Println(err)
 	}
 
-	fmt.Println(j)
+	// fmt.Println(j)
 	return ctx.JSON(j)
 }
 
 func GetContentsAll(ctx *fiber.Ctx) error {
 	db := database.DbConn()
-	rows, err := db.Query(`SELECT data FROM posts3 ORDER BY updated_at DESC`)
+	var query models.Query
+
+	if err := ctx.BodyParser(&query); err != nil {
+		log.Println(err)
+		return err
+	}
+
+	// fmt.Printf("query:%+v\n", query)
+	stmt := `SELECT data FROM ` + query.Uid + ` ORDER BY updated_at DESC`
+	rows, err := db.Query(stmt)
 	if err != nil {
 		log.Println(err)
 	}
@@ -83,31 +96,32 @@ func GetContentsAll(ctx *fiber.Ctx) error {
 
 func GetRelated(ctx *fiber.Ctx) error {
 	db := database.DbConn()
-	var slug models.Slug
+	var query models.Query
 
-	if err := ctx.BodyParser(&slug); err != nil {
+	if err := ctx.BodyParser(&query); err != nil {
 		log.Println(err)
 	}
-	fmt.Println("slug:", slug)
+	// fmt.Println("query:", query)
 	// とあるタグ名(リクエストされたslug)を指定している記事を収集
-	p, err := db.Prepare(`SELECT data FROM posts3 WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`)
+	stmt := `SELECT data FROM ` + query.Uid + ` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`
+	p, err := db.Prepare(stmt)
 	if err != nil {
 		log.Println(err)
 	}
 	defer p.Close()
 
 	// jsonPath := "tags"
-	// str := `'"` + slug.Slug + `"'`
-	str := `"` + slug.Slug + `"` // -上手くいった。多分 「'」が不要なのだろう
-	// str := slug.Slug
-	fmt.Println("str:", str)
+	// str := `'"` + query.Slug + `"'`
+	str := `"` + query.Slug + `"` // -上手くいった。多分 「'」が不要なのだろう
+	// str := query.Slug
+	// fmt.Println("str:", str)
 
 	rows, err := p.Query(str)
 	// fmt.Printf("p:%+v\n", p)
 
 	// `SELECT data FROM posts3 WHERE JSON_CONTAINS(data, '"test"', '$.tags'`
 	// rows, err := db.Query(`SELECT data FROM posts3 WHERE JSON_CONTAINS(data, '"memo"', '$.tags')`) // - 上手くいった
-	// rows, err := db.Query(`SELECT data FROM posts3 WHERE JSON_CONTAINS(data, '"` + slug.Slug + `"', '$.tags')`) // - 上手くいった
+	// rows, err := db.Query(`SELECT data FROM posts3 WHERE JSON_CONTAINS(data, '"` + query.Slug + `"', '$.tags')`) // - 上手くいった
 	// p, err := db.Prepare(`SELECT data FROM posts3 WHERE JSON_CONTAINS(data, ?, '$.tags'`)
 
 	if err != nil {
@@ -129,12 +143,13 @@ func GetRelated(ctx *fiber.Ctx) error {
 	var tagMapList []map[string][]JsonObject
 
 	if len(js) != 0 {
-		tagMap := map[string][]JsonObject{slug.Slug: js}
+		tagMap := map[string][]JsonObject{query.Slug: js}
 		tagMapList = append(tagMapList, tagMap)
 		return ctx.JSON(tagMapList)
 	} else { // 何も指定されていないのは普通の記事ページなので関連コンテンツを収集
 		var j []uint8
-		err := db.QueryRow(`SELECT data->'$.tags' FROM posts3 WHERE slug = ?`, slug.Slug).Scan(&j)
+		stmt := `SELECT data->'$.tags' FROM ` + query.Uid + ` WHERE slug = ?`
+		err := db.QueryRow(stmt, query.Slug).Scan(&j)
 		if err != nil {
 			log.Println(err)
 		}
@@ -150,7 +165,8 @@ func GetRelated(ctx *fiber.Ctx) error {
 		// fmt.Println(tags)
 		for _, v := range tags {
 			var jslist []JsonObject
-			p, err := db.Prepare(`SELECT data FROM posts3 WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`)
+			stmt := `SELECT data FROM ` + query.Uid + ` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`
+			p, err := db.Prepare(stmt)
 			if err != nil {
 				log.Println(err)
 			}
@@ -178,22 +194,24 @@ func GetRelated(ctx *fiber.Ctx) error {
 			tagMap := map[string][]JsonObject{v: jslist}
 			tagMapList = append(tagMapList, tagMap)
 		}
-		fmt.Printf("######\n\ntagMapList: %+v\n", tagMapList)
+		// fmt.Printf("######\n\ntagMapList: %+v\n", tagMapList)
 		return ctx.JSON(tagMapList)
 	}
 }
 
 func GetRelatedOnly(ctx *fiber.Ctx) error {
 	db := database.DbConn()
-	var tags models.Tags
-	if err := ctx.BodyParser(&tags); err != nil {
+	var query models.Query
+	if err := ctx.BodyParser(&query); err != nil {
 		log.Println(err)
 	}
+	// fmt.Printf("query%+v\n", query)
 	// 最終的に返す json
 	var tagMapList []map[string][]JsonObject
-	for _, v := range tags.Tags {
+	for _, v := range query.Tags {
 		var jslist []JsonObject
-		p, err := db.Prepare(`SELECT data FROM posts3 WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`)
+		stmt := `SELECT data FROM ` + query.Uid + ` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`
+		p, err := db.Prepare(stmt)
 		if err != nil {
 			log.Println(err)
 		}
@@ -222,7 +240,7 @@ func GetRelatedOnly(ctx *fiber.Ctx) error {
 		tagMapList = append(tagMapList, tagMap)
 	}
 
-	fmt.Printf("######\n\ntagMapList: %+v\n", tagMapList)
+	// fmt.Printf("######\n\ntagMapList: %+v\n", tagMapList)
 	return ctx.JSON(tagMapList)
 }
 
@@ -234,18 +252,20 @@ func PostContent(ctx *fiber.Ctx) error {
 		log.Println(err)
 		return err
 	}
-	// fmt.Println(content)
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS posts3 (
+	stmt := `CREATE TABLE IF NOT EXISTS ` + content.User + ` (
         id int NOT NULL AUTO_INCREMENT,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         slug varchar(200) NOT NULL UNIQUE,
         data json,
-        PRIMARY KEY (id))`)
+        PRIMARY KEY (id))`
+	// fmt.Println(content)
+	_, err := db.Exec(stmt)
 	if err != nil {
 		log.Println(err)
 	}
-	i, err := db.Prepare(`INSERT INTO posts3 (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`)
+	stmt2 := `INSERT INTO ` + content.User + ` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`
+	i, err := db.Prepare(stmt2)
 	if err != nil {
 		fmt.Println("error: ", i)
 		log.Println(err)
@@ -267,7 +287,8 @@ func PostContent(ctx *fiber.Ctx) error {
 	// fmt.Println(r)
 
 	for _, v := range content.Tags {
-		i, err := db.Prepare(`INSERT INTO posts3 (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`)
+		stmt3 := `INSERT INTO ` + content.User + ` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`
+		i, err := db.Prepare(stmt3)
 		if err != nil {
 			log.Print(err)
 		}
@@ -292,7 +313,8 @@ func PostContent(ctx *fiber.Ctx) error {
 	}
 
 	var u string
-	err = db.QueryRow(`SELECT updated_at FROM posts3 WHERE slug = ?`, content.Slug).Scan(&u)
+	stmt4 := `SELECT updated_at FROM ` + content.User + ` WHERE slug = ?`
+	err = db.QueryRow(stmt4, content.Slug).Scan(&u)
 	if err != nil {
 		log.Println(err)
 	}
@@ -335,19 +357,20 @@ func Post(ctx *fiber.Ctx) error {
 
 func DeleteContent(ctx *fiber.Ctx) error {
 	db := database.DbConn()
-	var slug models.Slug
-
-	if err := ctx.BodyParser(&slug); err != nil {
+	var query models.Query
+	if err := ctx.BodyParser(&query); err != nil {
 		log.Println(err)
 		return err
 	}
-	p, err := db.Prepare(`DELETE FROM posts3 WHERE slug = ?`)
+	// fmt.Println(query)
+	stmt := `DELETE FROM ` + query.Uid + ` WHERE slug = ?`
+	p, err := db.Prepare(stmt)
 	if err != nil {
 		log.Println(err)
 	}
 	defer p.Close()
 
-	p.Exec(slug.Slug)
+	p.Exec(query.Slug)
 	if err != nil {
 		log.Println(err)
 		return err
