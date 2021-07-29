@@ -73,15 +73,16 @@ func GetContentsAll(ctx *fiber.Ctx) error {
 		return err
 	}
 
+	var js []JsonObject
 	// fmt.Printf("query:%+v\n", query)
 	stmt := `SELECT data FROM ` + query.Uid + ` ORDER BY updated_at DESC`
 	rows, err := db.Query(stmt)
 	if err != nil {
 		log.Println(err)
+		return ctx.JSON(js)
 	}
 	defer rows.Close()
 
-	var js []JsonObject
 	for rows.Next() {
 		var j JsonObject
 		if err := rows.Scan(&j); err != nil {
@@ -202,9 +203,11 @@ func GetRelated(ctx *fiber.Ctx) error {
 func GetRelatedOnly(ctx *fiber.Ctx) error {
 	db := database.DbConn()
 	var query models.Query
+
 	if err := ctx.BodyParser(&query); err != nil {
 		log.Println(err)
 	}
+
 	// fmt.Printf("query%+v\n", query)
 	// 最終的に返す json
 	var tagMapList []map[string][]JsonObject
@@ -214,6 +217,7 @@ func GetRelatedOnly(ctx *fiber.Ctx) error {
 		p, err := db.Prepare(stmt)
 		if err != nil {
 			log.Println(err)
+			return ctx.JSON(tagMapList)
 		}
 		defer p.Close()
 		tag := `"` + v + `"` // -上手くいった。多分 「'」が不要なのだろう
