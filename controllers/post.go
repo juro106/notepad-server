@@ -68,9 +68,17 @@ func GetContent(ctx *fiber.Ctx) error {
 	if err != nil {
 		log.Println(err)
 	}
+	// stmt2 := `SELECT updated_at, data FROM ` + tableName + ` WHERE slug = ?`
+	stmt2 := `SELECT json_object('updated_at', updated_at, 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title') FROM ` + tableName + ` WHERE slug = ?`
+	// fmt.Println(stmt2)
+	var j2 JsonObject
+	err = db.QueryRow(stmt2, query.Slug).Scan(&j2)
+	if err != nil {
+		log.Println(err)
+	}
 
 	// fmt.Println(j)
-	return ctx.JSON(j)
+	return ctx.JSON(j2)
 }
 
 func GetContentsAll(ctx *fiber.Ctx) error {
@@ -103,8 +111,9 @@ func GetContentsAll(ctx *fiber.Ctx) error {
 	}
 
 	// fmt.Printf("query:%+v\n", query)
-	stmt2 := `SELECT data FROM ` + tableName + ` ORDER BY updated_at DESC`
-	rows, err := db.Query(stmt2)
+	// stmt2 := `SELECT data FROM ` + tableName + ` ORDER BY updated_at DESC`
+	stmt3 := `SELECT json_object('updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title') FROM ` + tableName + ` ORDER BY updated_at DESC`
+	rows, err := db.Query(stmt3)
 	var js []JsonObject
 	if err != nil {
 		log.Println(err)
