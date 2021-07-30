@@ -69,7 +69,7 @@ func GetContent(ctx *fiber.Ctx) error {
 		log.Println(err)
 	}
 	// stmt2 := `SELECT updated_at, data FROM ` + tableName + ` WHERE slug = ?`
-	stmt2 := `SELECT json_object('updated_at', updated_at, 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title') FROM ` + tableName + ` WHERE slug = ?`
+	stmt2 := `SELECT json_object('updated_at', updated_at, 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags') FROM ` + tableName + ` WHERE slug = ?`
 	// fmt.Println(stmt2)
 	var j2 JsonObject
 	err = db.QueryRow(stmt2, query.Slug).Scan(&j2)
