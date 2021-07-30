@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -51,10 +52,18 @@ func GetContent(ctx *fiber.Ctx) error {
 		return err
 	}
 	// fmt.Println("query", query)
-	var j JsonObject
+
+	var tableName string
+	var defaultUser = os.Getenv("DEFAULT_USER")
+	if len(query.Uid) > 0 {
+		tableName = query.Uid
+	} else {
+		tableName = defaultUser
+	}
 	// table := "posts3"
-	stmt := `SELECT data FROM ` + query.Uid + ` WHERE slug = ?`
+	stmt := `SELECT data FROM ` + tableName + ` WHERE slug = ?`
 	// fmt.Println(stmt)
+	var j JsonObject
 	err := db.QueryRow(stmt, query.Slug).Scan(&j)
 	if err != nil {
 		log.Println(err)
@@ -73,10 +82,30 @@ func GetContentsAll(ctx *fiber.Ctx) error {
 		return err
 	}
 
-	var js []JsonObject
+	var tableName string
+	var defaultUser = os.Getenv("DEFAULT_USER")
+	if len(query.Uid) > 0 {
+		tableName = query.Uid
+	} else {
+		tableName = defaultUser
+	}
+	stmt := `CREATE TABLE IF NOT EXISTS ` + tableName + ` (
+        id int NOT NULL AUTO_INCREMENT,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        slug varchar(200) NOT NULL UNIQUE,
+        data json,
+        PRIMARY KEY (id))`
+	// fmt.Println(content)
+	_, err := db.Exec(stmt)
+	if err != nil {
+		log.Println(err)
+	}
+
 	// fmt.Printf("query:%+v\n", query)
-	stmt := `SELECT data FROM ` + query.Uid + ` ORDER BY updated_at DESC`
-	rows, err := db.Query(stmt)
+	stmt2 := `SELECT data FROM ` + tableName + ` ORDER BY updated_at DESC`
+	rows, err := db.Query(stmt2)
+	var js []JsonObject
 	if err != nil {
 		log.Println(err)
 		return ctx.JSON(js)
@@ -103,8 +132,15 @@ func GetRelated(ctx *fiber.Ctx) error {
 		log.Println(err)
 	}
 	// fmt.Println("query:", query)
+	var tableName string
+	var defaultUser = os.Getenv("DEFAULT_USER")
+	if len(query.Uid) > 0 {
+		tableName = query.Uid
+	} else {
+		tableName = defaultUser
+	}
 	// とあるタグ名(リクエストされたslug)を指定している記事を収集
-	stmt := `SELECT data FROM ` + query.Uid + ` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`
+	stmt := `SELECT data FROM ` + tableName + ` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`
 	p, err := db.Prepare(stmt)
 	if err != nil {
 		log.Println(err)
@@ -149,7 +185,7 @@ func GetRelated(ctx *fiber.Ctx) error {
 		return ctx.JSON(tagMapList)
 	} else { // 何も指定されていないのは普通の記事ページなので関連コンテンツを収集
 		var j []uint8
-		stmt := `SELECT data->'$.tags' FROM ` + query.Uid + ` WHERE slug = ?`
+		stmt := `SELECT data->'$.tags' FROM ` + tableName + ` WHERE slug = ?`
 		err := db.QueryRow(stmt, query.Slug).Scan(&j)
 		if err != nil {
 			log.Println(err)
@@ -166,7 +202,7 @@ func GetRelated(ctx *fiber.Ctx) error {
 		// fmt.Println(tags)
 		for _, v := range tags {
 			var jslist []JsonObject
-			stmt := `SELECT data FROM ` + query.Uid + ` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`
+			stmt := `SELECT data FROM ` + tableName + ` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`
 			p, err := db.Prepare(stmt)
 			if err != nil {
 				log.Println(err)
@@ -256,20 +292,8 @@ func PostContent(ctx *fiber.Ctx) error {
 		log.Println(err)
 		return err
 	}
-	stmt := `CREATE TABLE IF NOT EXISTS ` + content.User + ` (
-        id int NOT NULL AUTO_INCREMENT,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        slug varchar(200) NOT NULL UNIQUE,
-        data json,
-        PRIMARY KEY (id))`
-	// fmt.Println(content)
-	_, err := db.Exec(stmt)
-	if err != nil {
-		log.Println(err)
-	}
-	stmt2 := `INSERT INTO ` + content.User + ` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`
-	i, err := db.Prepare(stmt2)
+	stmt := `INSERT INTO ` + content.User + ` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`
+	i, err := db.Prepare(stmt)
 	if err != nil {
 		fmt.Println("error: ", i)
 		log.Println(err)
@@ -291,8 +315,8 @@ func PostContent(ctx *fiber.Ctx) error {
 	// fmt.Println(r)
 
 	for _, v := range content.Tags {
-		stmt3 := `INSERT INTO ` + content.User + ` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`
-		i, err := db.Prepare(stmt3)
+		stmt2 := `INSERT INTO ` + content.User + ` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`
+		i, err := db.Prepare(stmt2)
 		if err != nil {
 			log.Print(err)
 		}
@@ -366,8 +390,15 @@ func DeleteContent(ctx *fiber.Ctx) error {
 		log.Println(err)
 		return err
 	}
+	var tableName string
+	var defaultUser = os.Getenv("DEFAULT_USER")
+	if len(query.Uid) > 0 {
+		tableName = query.Uid
+	} else {
+		tableName = defaultUser
+	}
 	// fmt.Println(query)
-	stmt := `DELETE FROM ` + query.Uid + ` WHERE slug = ?`
+	stmt := `DELETE FROM ` + tableName + ` WHERE slug = ?`
 	p, err := db.Prepare(stmt)
 	if err != nil {
 		log.Println(err)
