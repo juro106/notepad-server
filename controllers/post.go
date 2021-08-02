@@ -11,8 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"context"
 	"notepad/database"
+	_ "notepad/middleware"
 	"notepad/models"
+
+	firebase "firebase.google.com/go"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gofiber/fiber/v2"
@@ -131,6 +135,43 @@ func GetContentsAll(ctx *fiber.Ctx) error {
 
 	// fmt.Println(js)
 	return ctx.JSON(js)
+}
+
+func CreateTable(ctx *fiber.Ctx) error {
+	db := database.DbConn()
+	type Name struct {
+		Name string `json:"name"`
+	}
+	var name Name
+	if err := ctx.BodyParser(&name); err != nil {
+		log.Println(err)
+	}
+	stmt := `CREATE TABLE ` + name.Name + ` (
+        id int NOT NULL AUTO_INCREMENT,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        slug varchar(200) NOT NULL UNIQUE,
+        data json,
+        PRIMARY KEY (id))`
+	// fmt.Println(content)
+	_, err := db.Exec(stmt)
+	var message models.Message
+	t := fmt.Sprintf("%s", time.Now())
+	message.UpdatedAt = t
+	if err != nil {
+		log.Println(err)
+		message.Message = fmt.Sprintf("%s", err)
+		return ctx.JSON(message)
+	} else {
+		message.Message = "success"
+		return ctx.JSON(message)
+	}
+}
+
+func GetContentN(ctx *fiber.Ctx) error {
+	msg := ctx.Params("projects") + ctx.Params("slug")
+
+	return ctx.SendString("project & slug: " + msg)
 }
 
 func GetRelated(ctx *fiber.Ctx) error {
@@ -426,4 +467,40 @@ func DeleteContent(ctx *fiber.Ctx) error {
 		}
 		return ctx.JSON(message)
 	}
+}
+
+func SecretUserInfo(ctx *fiber.Ctx) error {
+	type JsonObject map[string]interface{}
+
+	app, err := firebase.NewApp(context.Background(), nil)
+	if err != nil {
+		log.Fatalf("error initializing app: %v\n", err)
+	}
+
+	// fmt.Println(app)
+	idToken := ctx.Request().Header.Peek("Authorization")
+	// fmt.Printf("header %+v\n", idToken)
+	// fmt.Printf("Type %T\n", idToken)
+
+	client, err := app.Auth(context.Background())
+	if err != nil {
+		log.Fatalf("error getting Auth client%v\n", err)
+	}
+
+	token, err := client.VerifyIDToken(context.Background(), string(idToken))
+	if err != nil {
+		log.Fatalf("error verifying ID token: %v\n", err)
+	}
+	// log.Printf("Varified ID token: %+v\n", token)
+	log.Printf("token: %v\n", token.UID)
+
+	// var uid string
+	// u, err := client.GetUser(context.Background(), uid)
+	// log.Printf("u %v\n", &client)
+	// if err != nil {
+	// 	log.Fatalf("error getting user %s %v\n", uid, err)
+	// }
+	// fmt.Println("uid", uid)
+	// fmt.Println("u", u)
+	return ctx.JSON(token)
 }
