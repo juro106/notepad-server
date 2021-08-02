@@ -13,7 +13,7 @@ import (
 
 	"context"
 	"notepad/database"
-	_ "notepad/middleware"
+	"notepad/middleware"
 	"notepad/models"
 
 	firebase "firebase.google.com/go"
@@ -48,6 +48,9 @@ func (j JsonObject) Value() (driver.Value, error) {
 }
 
 func GetContent(ctx *fiber.Ctx) error {
+	id, _ := middleware.GetUserID(ctx)
+	fmt.Println(id)
+
 	db := database.DbConn()
 	var query models.Query
 
@@ -470,17 +473,13 @@ func DeleteContent(ctx *fiber.Ctx) error {
 }
 
 func SecretUserInfo(ctx *fiber.Ctx) error {
-	type JsonObject map[string]interface{}
 
 	app, err := firebase.NewApp(context.Background(), nil)
 	if err != nil {
 		log.Fatalf("error initializing app: %v\n", err)
 	}
 
-	// fmt.Println(app)
 	idToken := ctx.Request().Header.Peek("Authorization")
-	// fmt.Printf("header %+v\n", idToken)
-	// fmt.Printf("Type %T\n", idToken)
 
 	client, err := app.Auth(context.Background())
 	if err != nil {
@@ -491,16 +490,7 @@ func SecretUserInfo(ctx *fiber.Ctx) error {
 	if err != nil {
 		log.Fatalf("error verifying ID token: %v\n", err)
 	}
-	// log.Printf("Varified ID token: %+v\n", token)
 	log.Printf("token: %v\n", token.UID)
 
-	// var uid string
-	// u, err := client.GetUser(context.Background(), uid)
-	// log.Printf("u %v\n", &client)
-	// if err != nil {
-	// 	log.Fatalf("error getting user %s %v\n", uid, err)
-	// }
-	// fmt.Println("uid", uid)
-	// fmt.Println("u", u)
 	return ctx.JSON(token)
 }

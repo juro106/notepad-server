@@ -2,6 +2,7 @@ package routes
 
 import (
 	"notepad/controllers"
+	"notepad/middleware"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -10,9 +11,13 @@ func Setup(app *fiber.App) {
 	// api := app.Group("api")
 
 	// Get
-	app.Get("secret/userinfo", controllers.SecretUserInfo)
+	// app.Get("secret/userinfo", controllers.SecretUserInfo)
 	app.Get("show", controllers.Show)
 	app.Get(":projects/:slug", controllers.GetContentN)
+	// middleware
+	auth := app.Use(middleware.IsAuthenticate)
+	auth.Get("secret/userinfo", controllers.SecretUserInfo)
+
 	// Post
 	app.Post("post", controllers.Post)
 	app.Post("create-table", controllers.CreateTable)

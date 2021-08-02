@@ -1,4 +1,5 @@
 .database/
 .env
 main
+firebase.json
 
