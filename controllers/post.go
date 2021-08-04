@@ -2,10 +2,13 @@ package controllers
 
 import (
 	"bytes"
+	"crypto/rand"
 	"database/sql/driver"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -18,8 +21,10 @@ import (
 
 	firebase "firebase.google.com/go"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/session"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type JsonObject map[string]interface{}
@@ -48,8 +53,6 @@ func (j JsonObject) Value() (driver.Value, error) {
 }
 
 func GetContent(ctx *fiber.Ctx) error {
-	id, _ := middleware.GetUserID(ctx)
-	fmt.Println(id)
 
 	db := database.DbConn()
 	var query models.Query
@@ -88,86 +91,47 @@ func GetContent(ctx *fiber.Ctx) error {
 	return ctx.JSON(j2)
 }
 
-func GetContentsAll(ctx *fiber.Ctx) error {
-	db := database.DbConn()
-	var query models.Query
-
-	if err := ctx.BodyParser(&query); err != nil {
-		log.Println(err)
-		return err
-	}
-
-	var tableName string
-	var defaultUser = os.Getenv("DEFAULT_USER")
-	if len(query.Uid) > 0 {
-		tableName = query.Uid
-	} else {
-		tableName = defaultUser
-	}
-	stmt := `CREATE TABLE IF NOT EXISTS ` + tableName + ` (
-        id int NOT NULL AUTO_INCREMENT,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        slug varchar(200) NOT NULL UNIQUE,
-        data json,
-        PRIMARY KEY (id))`
-	// fmt.Println(content)
-	_, err := db.Exec(stmt)
-	if err != nil {
-		log.Println(err)
-	}
-
-	// fmt.Printf("query:%+v\n", query)
-	// stmt2 := `SELECT data FROM ` + tableName + ` ORDER BY updated_at DESC`
-	stmt3 := `SELECT json_object('updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title') FROM ` + tableName + ` ORDER BY updated_at DESC`
-	rows, err := db.Query(stmt3)
-	var js []JsonObject
-	if err != nil {
-		log.Println(err)
-		return ctx.JSON(js)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var j JsonObject
-		if err := rows.Scan(&j); err != nil {
-			log.Println(err)
-		}
-		js = append(js, j)
-	}
-
-	// fmt.Println(js)
-	return ctx.JSON(js)
-}
-
-func CreateTable(ctx *fiber.Ctx) error {
+func CreateTable(c *fiber.Ctx) error {
 	db := database.DbConn()
 	type Name struct {
 		Name string `json:"name"`
 	}
 	var name Name
-	if err := ctx.BodyParser(&name); err != nil {
+	if err := c.BodyParser(&name); err != nil {
 		log.Println(err)
 	}
+
 	stmt := `CREATE TABLE ` + name.Name + ` (
-        id int NOT NULL AUTO_INCREMENT,
+        slug varchar(200) NOT NULL UNIQUE,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        slug varchar(200) NOT NULL UNIQUE,
         data json,
-        PRIMARY KEY (id))`
+        PRIMARY KEY (slug))`
 	// fmt.Println(content)
 	_, err := db.Exec(stmt)
+
+	ins, err := db.Prepare("INSERT INTO projects (name, owner) VALUES(?, ?)")
+	if err != nil {
+		log.Println(err)
+	}
+	defer ins.Close()
+	uid := middleware.GetSessionUID(c)
+	ret, err := ins.Exec(name.Name, uid)
+	if err != nil {
+		log.Println(err)
+	}
+	fmt.Println(ret)
+
 	var message models.Message
 	t := fmt.Sprintf("%s", time.Now())
 	message.UpdatedAt = t
 	if err != nil {
 		log.Println(err)
 		message.Message = fmt.Sprintf("%s", err)
-		return ctx.JSON(message)
+		return c.JSON(message)
 	} else {
 		message.Message = "success"
-		return ctx.JSON(message)
+		return c.JSON(message)
 	}
 }
 
@@ -472,8 +436,39 @@ func DeleteContent(ctx *fiber.Ctx) error {
 	}
 }
 
-func SecretUserInfo(ctx *fiber.Ctx) error {
+func NewSessionID() string {
+	// session ID 発行
+	b := make([]byte, 64)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		return ""
+	}
+	return base64.URLEncoding.EncodeToString(b)
+}
 
+func DeleteCookie(ctx *fiber.Ctx, arg string) {
+	ctx.Cookie(&fiber.Cookie{
+		Name: arg,
+		// Expires: time.Now().Add(-(time.Hour * 2)),
+		// Expires: time.Now().Add(24 * time.Hour),
+		Expires: time.Now().Add(-3 * time.Second),
+	})
+	ctx.ClearCookie(arg)
+}
+
+var store = session.New(session.Config{
+	KeyLookup:      "cookie:cid",
+	CookiePath:     "/",
+	CookieSecure:   true,
+	CookieHTTPOnly: true,
+})
+
+func SecretUserInfo(ctx *fiber.Ctx) error {
+	fmt.Println("SecretUserInfo")
+	// DeleteCookie(ctx, "token")
+	// DeleteCookie(ctx, "John")
+	// DeleteCookie(ctx, "sesseion_id")
+	// ctx.ClearCookie("token")
+	// ctx.ClearCookie("session_id")
 	app, err := firebase.NewApp(context.Background(), nil)
 	if err != nil {
 		log.Fatalf("error initializing app: %v\n", err)
@@ -490,6 +485,51 @@ func SecretUserInfo(ctx *fiber.Ctx) error {
 	if err != nil {
 		log.Fatalf("error verifying ID token: %v\n", err)
 	}
+
+	// sessionID := NewSessionID()
+	//
+	// // cookie
+	// cookie := fiber.Cookie{
+	// 	Name:  "session_id",
+	// 	Value: sessionID,
+	// 	// Name:     "John",
+	// 	// Value:    "",
+	// 	Secure:   true,
+	// 	Path:     "/",
+	// 	HTTPOnly: true,
+	// 	// Expires:  time.Now().Add(24 * time.Hour),
+	// }
+	// ctx.Cookie(&cookie)
+	// fmt.Printf("cookie %+v\n", cookie)
+	// ctx.Cookie(&fiber.Cookie{
+	// 	Name:     "token",
+	// 	Value:    "randomValue",
+	// 	Expires:  time.Now().Add(24 * time.Hour),
+	// 	HTTPOnly: true,
+	// })
+	// // session store
+	// fmt.Printf("%T\n", store)
+	// // set cookie
+	//
+	sess, err := store.Get(ctx)
+	if err != nil {
+		log.Fatalf("session err %v\n", err)
+	}
+	sess.Set("name", token.UID)
+	name := sess.Get("name")
+	fmt.Println("name", name)
+
+	if err := sess.Save(); err != nil {
+		panic(err)
+	}
+	//
+	sid := sess.ID()
+	fmt.Printf("sid %+v\n", sid)
+	fmt.Printf("sess %+v\n", sess)
+	// fmt.Printf("sid: %+v\n", sid)
+
+	// log.Printf("store: %+v\n", store)
+
 	log.Printf("token: %v\n", token.UID)
 
 	return ctx.JSON(token)
