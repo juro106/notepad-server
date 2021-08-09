@@ -11,7 +11,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"context"
@@ -26,6 +25,13 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 )
+
+func makeImageDir(dir string) {
+	dirname := "./images/" + dir
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		os.Mkdir(dirname, 777)
+	}
+}
 
 type JsonObject map[string]interface{}
 
@@ -110,6 +116,9 @@ func CreateTable(c *fiber.Ctx) error {
 	// fmt.Println(content)
 	_, err := db.Exec(stmt)
 
+	// 画像ディレクトリ
+	makeImageDir(name.Name)
+
 	ins, err := db.Prepare("INSERT INTO projects (name, owner) VALUES(?, ?)")
 	if err != nil {
 		log.Println(err)
@@ -141,166 +150,6 @@ func GetContentN(ctx *fiber.Ctx) error {
 	return ctx.SendString("project & slug: " + msg)
 }
 
-func GetRelated(ctx *fiber.Ctx) error {
-	db := database.DbConn()
-	var query models.Query
-
-	if err := ctx.BodyParser(&query); err != nil {
-		log.Println(err)
-	}
-	// fmt.Println("query:", query)
-	var tableName string
-	var defaultUser = os.Getenv("DEFAULT_USER")
-	if len(query.Uid) > 0 {
-		tableName = query.Uid
-	} else {
-		tableName = defaultUser
-	}
-	// とあるタグ名(リクエストされたslug)を指定している記事を収集
-	stmt := `SELECT data FROM ` + tableName + ` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`
-	p, err := db.Prepare(stmt)
-	if err != nil {
-		log.Println(err)
-	}
-	defer p.Close()
-
-	// jsonPath := "tags"
-	// str := `'"` + query.Slug + `"'`
-	str := `"` + query.Slug + `"` // -上手くいった。多分 「'」が不要なのだろう
-	// str := query.Slug
-	// fmt.Println("str:", str)
-
-	rows, err := p.Query(str)
-	// fmt.Printf("p:%+v\n", p)
-
-	// `SELECT data FROM posts3 WHERE JSON_CONTAINS(data, '"test"', '$.tags'`
-	// rows, err := db.Query(`SELECT data FROM posts3 WHERE JSON_CONTAINS(data, '"memo"', '$.tags')`) // - 上手くいった
-	// rows, err := db.Query(`SELECT data FROM posts3 WHERE JSON_CONTAINS(data, '"` + query.Slug + `"', '$.tags')`) // - 上手くいった
-	// p, err := db.Prepare(`SELECT data FROM posts3 WHERE JSON_CONTAINS(data, ?, '$.tags'`)
-
-	if err != nil {
-		log.Println(err)
-	}
-	// fmt.Printf("rows: %+v\n", rows)
-	defer rows.Close()
-
-	var js []JsonObject
-	for rows.Next() {
-		var j JsonObject
-		if err := rows.Scan(&j); err != nil {
-			log.Println(err)
-		}
-		js = append(js, j)
-	}
-
-	// 最終的に返す json
-	var tagMapList []map[string][]JsonObject
-
-	if len(js) != 0 {
-		tagMap := map[string][]JsonObject{query.Slug: js}
-		tagMapList = append(tagMapList, tagMap)
-		return ctx.JSON(tagMapList)
-	} else { // 何も指定されていないのは普通の記事ページなので関連コンテンツを収集
-		var j []uint8
-		stmt := `SELECT data->'$.tags' FROM ` + tableName + ` WHERE slug = ?`
-		err := db.QueryRow(stmt, query.Slug).Scan(&j)
-		if err != nil {
-			log.Println(err)
-		}
-		// fmt.Printf("%T\n", j)
-		// fmt.Printf("%+v\n", j)
-		str := string(j)
-		str = strings.Replace(str, "[", "", 1)
-		str = strings.Replace(str, "]", "", 1)
-		str = strings.Replace(str, " ", "", -1)
-		str = strings.Replace(str, "\"", "", -1)
-		// fmt.Println(str)
-		tags := strings.Split(str, ",")
-		// fmt.Println(tags)
-		for _, v := range tags {
-			var jslist []JsonObject
-			stmt := `SELECT data FROM ` + tableName + ` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`
-			p, err := db.Prepare(stmt)
-			if err != nil {
-				log.Println(err)
-			}
-			defer p.Close()
-			tag := `"` + v + `"` // -上手くいった。多分 「'」が不要なのだろう
-			rows, err := p.Query(tag)
-			if err != nil {
-				log.Println(err)
-			}
-			defer rows.Close()
-			// tagHead := JsonObject{
-			// 	"user":    "tagName",
-			// 	"title":   v,
-			// 	"slug":    v,
-			// 	"content": "",
-			// }
-			// jslist = append(jslist, tagHead)
-			for rows.Next() {
-				var j JsonObject
-				if err := rows.Scan(&j); err != nil {
-					log.Println(err)
-				}
-				jslist = append(jslist, j)
-			}
-			tagMap := map[string][]JsonObject{v: jslist}
-			tagMapList = append(tagMapList, tagMap)
-		}
-		// fmt.Printf("######\n\ntagMapList: %+v\n", tagMapList)
-		return ctx.JSON(tagMapList)
-	}
-}
-
-func GetRelatedOnly(ctx *fiber.Ctx) error {
-	db := database.DbConn()
-	var query models.Query
-
-	if err := ctx.BodyParser(&query); err != nil {
-		log.Println(err)
-	}
-
-	// fmt.Printf("query%+v\n", query)
-	// 最終的に返す json
-	var tagMapList []map[string][]JsonObject
-	for _, v := range query.Tags {
-		var jslist []JsonObject
-		stmt := `SELECT data FROM ` + query.Uid + ` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')`
-		p, err := db.Prepare(stmt)
-		if err != nil {
-			log.Println(err)
-			return ctx.JSON(tagMapList)
-		}
-		defer p.Close()
-		tag := `"` + v + `"` // -上手くいった。多分 「'」が不要なのだろう
-		rows, err := p.Query(tag)
-		if err != nil {
-			log.Println(err)
-		}
-		defer rows.Close()
-		// tagHead := JsonObject{
-		// 	"user":    "tagName",
-		// 	"title":   v,
-		// 	"slug":    v,
-		// 	"content": "",
-		// }
-		// jslist = append(jslist, tagHead)
-		for rows.Next() {
-			var j JsonObject
-			if err := rows.Scan(&j); err != nil {
-				log.Println(err)
-			}
-			jslist = append(jslist, j)
-		}
-		tagMap := map[string][]JsonObject{v: jslist}
-		tagMapList = append(tagMapList, tagMap)
-	}
-
-	// fmt.Printf("######\n\ntagMapList: %+v\n", tagMapList)
-	return ctx.JSON(tagMapList)
-}
-
 func PostContent(ctx *fiber.Ctx) error {
 	db := database.DbConn()
 	var content models.Content
@@ -309,7 +158,7 @@ func PostContent(ctx *fiber.Ctx) error {
 		log.Println(err)
 		return err
 	}
-	stmt := `INSERT INTO ` + content.User + ` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`
+	stmt := `INSERT INTO ` + content.Project + ` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`
 	i, err := db.Prepare(stmt)
 	if err != nil {
 		fmt.Println("error: ", i)
@@ -332,7 +181,7 @@ func PostContent(ctx *fiber.Ctx) error {
 	// fmt.Println(r)
 
 	for _, v := range content.Tags {
-		stmt2 := `INSERT INTO ` + content.User + ` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`
+		stmt2 := `INSERT INTO ` + content.Project + ` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`
 		i, err := db.Prepare(stmt2)
 		if err != nil {
 			log.Print(err)
@@ -358,7 +207,7 @@ func PostContent(ctx *fiber.Ctx) error {
 	}
 
 	var u string
-	stmt4 := `SELECT updated_at FROM ` + content.User + ` WHERE slug = ?`
+	stmt4 := `SELECT updated_at FROM ` + content.Project + ` WHERE slug = ?`
 	err = db.QueryRow(stmt4, content.Slug).Scan(&u)
 	if err != nil {
 		log.Println(err)
@@ -407,14 +256,15 @@ func DeleteContent(ctx *fiber.Ctx) error {
 		log.Println(err)
 		return err
 	}
-	var tableName string
-	var defaultUser = os.Getenv("DEFAULT_USER")
-	if len(query.Uid) > 0 {
-		tableName = query.Uid
-	} else {
-		tableName = defaultUser
-	}
-	// fmt.Println(query)
+	tableName := query.Project
+	// var tableName string
+	// var defaultUser = os.Getenv("DEFAULT_USER")
+	// if len(query.Uid) > 0 {
+	// 	tableName = query.Project
+	// } else {
+	// 	tableName = defaultUser
+	// }
+	fmt.Println(query)
 	stmt := `DELETE FROM ` + tableName + ` WHERE slug = ?`
 	p, err := db.Prepare(stmt)
 	if err != nil {
@@ -533,4 +383,37 @@ func SecretUserInfo(ctx *fiber.Ctx) error {
 	log.Printf("token: %v\n", token.UID)
 
 	return ctx.JSON(token)
+}
+
+func UploadImage(c *fiber.Ctx) error {
+	file, err := c.FormFile("file")
+	if err != nil {
+		log.Println("image upload error --->", err)
+		return c.JSON(fiber.Map{"status": 500, "message": "Server error", "data": nil})
+	}
+	fmt.Printf("image filename:%+v\n", file.Filename)
+
+	projectName := c.FormValue("project")
+	if len(projectName) == 0 {
+		log.Println("get project name error --->")
+		return c.JSON(fiber.Map{"status": 500, "message": "Server error", "data": nil})
+	}
+	fmt.Printf("projectName:%+v\n", projectName)
+
+	filename := "./images/" + projectName + "/" + file.Filename
+
+	err = c.SaveFile(file, filename)
+	if err != nil {
+		log.Println("image save error --->", err)
+		return c.JSON(fiber.Map{"status": 500, "message": "Server error", "data": nil})
+	}
+
+	data := map[string]interface{}{
+		"imageName":   filename,
+		"projectName": projectName,
+		"header":      file.Header,
+		"size":        file.Size,
+	}
+
+	return c.JSON(fiber.Map{"status": 201, "messeage": "success", "data": data})
 }

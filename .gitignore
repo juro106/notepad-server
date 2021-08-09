@@ -1,4 +1,6 @@
 .database/
+temp/
+images/
 .env
 main
 firebase.json

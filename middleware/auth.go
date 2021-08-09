@@ -60,11 +60,22 @@ func SetUserInfo(c *fiber.Ctx) error {
 		panic(err)
 	}
 	//
-	fmt.Printf("sid %+v\n", sid)
-	fmt.Printf("sess %+v\n", sess)
-	log.Printf("uid: %v\n", uid)
+	// fmt.Printf("sid %+v\n", sid)
+	// fmt.Printf("sess %+v\n", sess)
+	// log.Printf("uid: %v\n", uid)
 
 	return c.JSON(sid)
+}
+
+func Logout(c *fiber.Ctx) error {
+	sess, err := store.Get(c)
+	if err != nil {
+		log.Fatalf("session err %v\n", err)
+	}
+	if err := sess.Destroy(); err != nil {
+		panic(err)
+	}
+	return c.JSON(fiber.Map{"message": "logout"})
 }
 
 func IsAuthenticate(c *fiber.Ctx) error {
@@ -75,14 +86,15 @@ func IsAuthenticate(c *fiber.Ctx) error {
 	if err != nil {
 		log.Fatalf("session err %v\n", err)
 	}
-	c.Cookies("name")
-	cid := c.Cookies("cid")
-	fmt.Printf("middleware cid:%+v\n", cid)
+	// c.Cookies("name")
+	// cid := c.Cookies("cid")
+	// fmt.Printf("middleware cid:%+v\n", cid)
 
-	uid := sess.Get(cid)
-	fmt.Printf("middleware session uid:%+v\n", uid)
 	name := sess.Get("name")
-	fmt.Printf("middleware session name uid:%+v\n", name)
+	fmt.Printf("middleware IsAuthenticate session name uid:%+v\n", name)
+	if name == nil {
+		return c.JSON(fiber.Map{"message": "認証エラー"})
+	}
 
 	return c.Next()
 }
@@ -98,7 +110,7 @@ func GetSessionUID(c *fiber.Ctx) string {
 	fmt.Printf("middleware cid:%+v\n", cid)
 
 	name := sess.Get("name")
-	fmt.Printf("middleware session name uid:%+v\n", name)
+	fmt.Printf("middleware GetSessionUID session name uid:%+v\n", name)
 	nameStr := fmt.Sprintf("%s", name)
 
 	return nameStr

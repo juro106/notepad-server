@@ -9,34 +9,37 @@ import (
 )
 
 func Setup(app *fiber.App) {
-	// api := app.Group("api")
+	v1 := app.Group("v1")
+	// Get public
+	v1.Get("public/contents-all", controllers.GetPublicContentsAll)
+	v1.Get("public/:slug", controllers.GetPublicContents)
+	v1.Get("public/related/:slug", controllers.GetPublicRelated)
 
-	app.Get("secret/userinfo", middleware.SetUserInfo)
-	auth := app.Use(middleware.IsAuthenticate)
+	// Get local
+	v1.Get("secret/userinfo", middleware.SetUserInfo)
+	v1.Get("secret/logout", middleware.Logout)
+	// Get local use middleware
+	auth := v1.Use(middleware.IsAuthenticate)
 	auth.Get("projects-list", controllers.GetProjects)
-	auth.Get(":projects/", controllers.GetContentsAll)
-	auth.Get(":projects/:slug", controllers.GetContents)
+	auth.Get("pages/:projects/", controllers.GetContentsAll)
+	auth.Get("pages/:projects/:slug", controllers.GetContents)
+	auth.Get("related/:projects/:slug", controllers.GetRelated)
 
-	auth.Post("get-content", controllers.GetContent)
-	auth.Post("get-contents-all", controllers.GetContentsAll)
-	// Get
-	app.Get("show", controllers.Show)
-	// app.Get(":projects/:slug", controller.GetContentN)
-
-	// middleware
-	// app.Get("secret/userinfo", middleware.SetUserInfo)
-	// auth.Get("secret/uinfo", controllers.SecretUserInfo)
+	v1.Get("show", controllers.Show)
+	// get images
+	v1.Get("images/:project/all", controllers.GetImages)
 
 	// Post
-	app.Post("post", controllers.Post)
-	app.Post("create-table", controllers.CreateTable)
-	app.Post("post-content", controllers.PostContent)
-	// app.Post("get-content", controllers.GetContent)
-	// app.Post("get-contents-all", controllers.GetContentsAll)
-	app.Post("get-related", controllers.GetRelated)
-	app.Post("get-related-only", controllers.GetRelatedOnly)
-	app.Post("delete-content", controllers.DeleteContent)
+	// auth.Post("get-content", controllers.GetContent)
+	// auth.Post("get-contents-all", controllers.GetContentsAll)
+	v1.Post("post", controllers.Post)
+	v1.Post("create-table", controllers.CreateTable)
+	v1.Post("post-content", controllers.PostContent)
+	v1.Post("get-related-only", controllers.GetRelatedOnly)
+	v1.Post("delete-content", controllers.DeleteContent)
 
+	auth.Post("images/upload", controllers.UploadImage)
+	auth.Delete("images/:projects/:filename", controllers.DeleteImage)
 	// app.Get("/", func(c *fiber.Ctx) error {
 	// 	return c.SendString("Hello Fiber!")
 	// })

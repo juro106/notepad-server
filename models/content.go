@@ -6,4 +6,6 @@ type Content struct {
 	Slug    string   `json:"slug"`
 	Tags    []string `json:"tags"`
 	Content string   `json:"content"`
+	Project string   `json:"project"`
+	Image   string   `json:"image"`
 }
