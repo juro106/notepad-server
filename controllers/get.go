@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 
@@ -22,6 +23,15 @@ func GetContents(c *fiber.Ctx) error {
 	tableName := c.Params("projects")
 	slug := c.Params("slug")
 
+	tableName, err := url.QueryUnescape(tableName)
+	if err != nil {
+		log.Println(err)
+	}
+	slug, err = url.QueryUnescape(slug)
+	if err != nil {
+		log.Println(err)
+	}
+
 	stmt := `SELECT json_object('updated_at', updated_at, 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM ` + tableName + ` WHERE slug = ?`
 	// fmt.Println(stmt2)
 	var j JsonObject
@@ -38,7 +48,11 @@ func GetContentsAll(c *fiber.Ctx) error {
 
 	tableName := c.Params("projects")
 
-	stmt := `SELECT json_object('updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title') FROM ` + tableName + ` ORDER BY updated_at DESC`
+	tableName, err := url.QueryUnescape(tableName)
+	if err != nil {
+		log.Println(err)
+	}
+	stmt := `SELECT json_object('updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'image', data->'$.image') FROM ` + tableName + ` ORDER BY updated_at DESC`
 	rows, err := db.Query(stmt)
 	var js []JsonObject
 	if err != nil {
@@ -114,6 +128,14 @@ func GetRelated(c *fiber.Ctx) error {
 
 	tableName := c.Params("projects")
 	slug := c.Params("slug")
+	tableName, err := url.QueryUnescape(tableName)
+	if err != nil {
+		log.Println(err)
+	}
+	slug, err = url.QueryUnescape(slug)
+	if err != nil {
+		log.Println(err)
+	}
 
 	// var defaultUser = os.Getenv("DEFAULT_USER") // ※public用の処理で使う予定
 
@@ -246,7 +268,12 @@ func GetPublicContents(c *fiber.Ctx) error {
 	tableName := os.Getenv("DEFAULT_TABLE")
 	slug := c.Params("slug")
 
-	stmt := `SELECT json_object('updated_at', updated_at, 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags') FROM ` + tableName + ` WHERE slug = ?`
+	slug, err := url.QueryUnescape(slug)
+	if err != nil {
+		log.Println(err)
+	}
+
+	stmt := `SELECT json_object('updated_at', updated_at, 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM ` + tableName + ` WHERE slug = ?`
 	// fmt.Println(stmt2)
 	var j JsonObject
 	if err := db.QueryRow(stmt, slug).Scan(&j); err != nil {
@@ -263,7 +290,7 @@ func GetPublicContentsAll(c *fiber.Ctx) error {
 
 	tableName := os.Getenv("DEFAULT_TABLE")
 
-	stmt := `SELECT json_object('updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title') FROM ` + tableName + ` ORDER BY updated_at DESC`
+	stmt := `SELECT json_object('updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'image', data->'$.image') FROM ` + tableName + ` ORDER BY updated_at DESC`
 	rows, err := db.Query(stmt)
 	var js []JsonObject
 	if err != nil {
@@ -290,6 +317,10 @@ func GetPublicRelated(c *fiber.Ctx) error {
 	tableName := os.Getenv("DEFAULT_TABLE")
 	slug := c.Params("slug")
 
+	slug, err := url.QueryUnescape(slug)
+	if err != nil {
+		log.Println(err)
+	}
 	// var defaultUser = os.Getenv("DEFAULT_USER") // ※public用の処理で使う予定
 
 	// とあるタグ名(リクエストされたslug)を指定している記事を収集

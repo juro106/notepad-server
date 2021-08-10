@@ -2,26 +2,19 @@ package controllers
 
 import (
 	"bytes"
-	"crypto/rand"
 	"database/sql/driver"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"time"
 
-	"context"
 	"notepad/database"
 	"notepad/middleware"
 	"notepad/models"
 
-	firebase "firebase.google.com/go"
-
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/session"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -29,7 +22,7 @@ import (
 func makeImageDir(dir string) {
 	dirname := "./images/" + dir
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		os.Mkdir(dirname, 777)
+		os.Mkdir(dirname, 0777)
 	}
 }
 
@@ -116,7 +109,7 @@ func CreateTable(c *fiber.Ctx) error {
 	// fmt.Println(content)
 	_, err := db.Exec(stmt)
 
-	// 画像ディレクトリ
+	// 画像ディレクトリも一緒に作成
 	makeImageDir(name.Name)
 
 	ins, err := db.Prepare("INSERT INTO projects (name, owner) VALUES(?, ?)")
@@ -257,13 +250,6 @@ func DeleteContent(ctx *fiber.Ctx) error {
 		return err
 	}
 	tableName := query.Project
-	// var tableName string
-	// var defaultUser = os.Getenv("DEFAULT_USER")
-	// if len(query.Uid) > 0 {
-	// 	tableName = query.Project
-	// } else {
-	// 	tableName = defaultUser
-	// }
 	fmt.Println(query)
 	stmt := `DELETE FROM ` + tableName + ` WHERE slug = ?`
 	p, err := db.Prepare(stmt)
@@ -284,105 +270,6 @@ func DeleteContent(ctx *fiber.Ctx) error {
 		}
 		return ctx.JSON(message)
 	}
-}
-
-func NewSessionID() string {
-	// session ID 発行
-	b := make([]byte, 64)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return ""
-	}
-	return base64.URLEncoding.EncodeToString(b)
-}
-
-func DeleteCookie(ctx *fiber.Ctx, arg string) {
-	ctx.Cookie(&fiber.Cookie{
-		Name: arg,
-		// Expires: time.Now().Add(-(time.Hour * 2)),
-		// Expires: time.Now().Add(24 * time.Hour),
-		Expires: time.Now().Add(-3 * time.Second),
-	})
-	ctx.ClearCookie(arg)
-}
-
-var store = session.New(session.Config{
-	KeyLookup:      "cookie:cid",
-	CookiePath:     "/",
-	CookieSecure:   true,
-	CookieHTTPOnly: true,
-})
-
-func SecretUserInfo(ctx *fiber.Ctx) error {
-	fmt.Println("SecretUserInfo")
-	// DeleteCookie(ctx, "token")
-	// DeleteCookie(ctx, "John")
-	// DeleteCookie(ctx, "sesseion_id")
-	// ctx.ClearCookie("token")
-	// ctx.ClearCookie("session_id")
-	app, err := firebase.NewApp(context.Background(), nil)
-	if err != nil {
-		log.Fatalf("error initializing app: %v\n", err)
-	}
-
-	idToken := ctx.Request().Header.Peek("Authorization")
-
-	client, err := app.Auth(context.Background())
-	if err != nil {
-		log.Fatalf("error getting Auth client%v\n", err)
-	}
-
-	token, err := client.VerifyIDToken(context.Background(), string(idToken))
-	if err != nil {
-		log.Fatalf("error verifying ID token: %v\n", err)
-	}
-
-	// sessionID := NewSessionID()
-	//
-	// // cookie
-	// cookie := fiber.Cookie{
-	// 	Name:  "session_id",
-	// 	Value: sessionID,
-	// 	// Name:     "John",
-	// 	// Value:    "",
-	// 	Secure:   true,
-	// 	Path:     "/",
-	// 	HTTPOnly: true,
-	// 	// Expires:  time.Now().Add(24 * time.Hour),
-	// }
-	// ctx.Cookie(&cookie)
-	// fmt.Printf("cookie %+v\n", cookie)
-	// ctx.Cookie(&fiber.Cookie{
-	// 	Name:     "token",
-	// 	Value:    "randomValue",
-	// 	Expires:  time.Now().Add(24 * time.Hour),
-	// 	HTTPOnly: true,
-	// })
-	// // session store
-	// fmt.Printf("%T\n", store)
-	// // set cookie
-	//
-	sess, err := store.Get(ctx)
-	if err != nil {
-		log.Fatalf("session err %v\n", err)
-	}
-	sess.Set("name", token.UID)
-	name := sess.Get("name")
-	fmt.Println("name", name)
-
-	if err := sess.Save(); err != nil {
-		panic(err)
-	}
-	//
-	sid := sess.ID()
-	fmt.Printf("sid %+v\n", sid)
-	fmt.Printf("sess %+v\n", sess)
-	// fmt.Printf("sid: %+v\n", sid)
-
-	// log.Printf("store: %+v\n", store)
-
-	log.Printf("token: %v\n", token.UID)
-
-	return ctx.JSON(token)
 }
 
 func UploadImage(c *fiber.Ctx) error {

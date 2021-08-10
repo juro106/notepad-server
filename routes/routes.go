@@ -39,7 +39,8 @@ func Setup(app *fiber.App) {
 	v1.Post("delete-content", controllers.DeleteContent)
 
 	auth.Post("images/upload", controllers.UploadImage)
-	auth.Delete("images/:projects/:filename", controllers.DeleteImage)
+	auth.Delete("images/:project/:filename", controllers.DeleteImage)
+	auth.Delete("projects/:project", controllers.DeleteProject)
 	// app.Get("/", func(c *fiber.Ctx) error {
 	// 	return c.SendString("Hello Fiber!")
 	// })
