@@ -208,7 +208,7 @@ func GetRelated(c *fiber.Ctx) error {
 		return c.JSON(tagMapList)
 	} else { // 何も指定されていないのは普通の記事ページなので関連コンテンツを収集
 		var t TagsObject
-		stmt := "SELECT data->'$.tags' FROM `" + tableName + "` WHERE slug = ?"
+		stmt := "SELECT JSON_OBJECT('tags', data->'$.tags') FROM `" + tableName + "` WHERE slug = ?"
 		err := db.QueryRow(stmt, slug).Scan(&t)
 		if err != nil {
 			log.Println(err)
@@ -223,7 +223,8 @@ func GetRelated(c *fiber.Ctx) error {
 				log.Println(err)
 			}
 			defer p.Close()
-			rows, err := p.Query(v)
+			tag := `"` + v + `"`
+			rows, err := p.Query(tag)
 			if err != nil {
 				log.Println(err)
 			}
@@ -482,7 +483,7 @@ func GetPublicRelated(c *fiber.Ctx) error {
 		return c.JSON(tagMapList)
 	} else { // 何も指定されていないのは普通の記事ページなので関連コンテンツを収集
 		var t TagsObject
-		stmt := "SELECT data->'$.tags' FROM `" + tableName + "` WHERE slug = ?"
+		stmt := "SELECT JSON_OBJECT('tags', data->'$.tags') FROM `" + tableName + "` WHERE slug = ?"
 		err := db.QueryRow(stmt, slug).Scan(&t)
 		if err != nil {
 			log.Println(err)
