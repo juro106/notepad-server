@@ -255,48 +255,32 @@ func GetTags(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).SendString("Sorry can't find that!")
 	}
 
-	stmt := "SELECT DISTINCT JSON_OBJECT('tags', data->'$.tags') FROM `" + tableName + "`"
-	// stmt = `SELECT DISTINCT JSON_EXTRACT(data, '$.tags') FROM public`
+	// tags が空のデータを抽出
+	stmt := "SELECT slug FROM `" + tableName + "` WHERE JSON_EXTRACT(data, '$.tags') = JSON_ARRAY()"
+	// stmt := "SELECT DISTINCT JSON_OBJECT('tags', data->'$.tags') FROM `" + tableName + "`"
 	p, err := db.Prepare(stmt)
 	if err != nil {
 		log.Println("tags get", err)
 	}
 	defer p.Close()
 
-	var js []TagsObject
-	// var js []JsonObject
+	// var js []TagsObject
+	var tagList []string
 	rows, err := p.Query()
 	if err != nil {
 		log.Println("p.Query", err)
-		return c.JSON(js)
+		return c.JSON(tagList)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var j TagsObject
-		if err := rows.Scan(&j); err != nil {
+		// var j TagsObject
+		var str string
+		if err := rows.Scan(&str); err != nil {
 			log.Println("json scan", err)
 		}
-		js = append(js, j)
-	}
-
-	tmpTagList := []string{}
-	for _, m := range js {
-		tags := m.Tags
-		for _, tag := range tags {
-			tmpTagList = append(tmpTagList, tag)
-		}
-	}
-	l := len(tmpTagList)
-	tagMap := make(map[string]struct{}, l)
-	tagList := make([]string, 0, l)
-
-	for _, elem := range tmpTagList {
-		// mapの第2引数には、その値が入っているかどうかの真偽値が入っている。
-		if _, ok := tagMap[elem]; !ok && len(elem) != 0 {
-			tagMap[elem] = struct{}{}
-			tagList = append(tagList, elem)
-		}
+		// js = append(js, j)
+		tagList = append(tagList, str)
 	}
 
 	sort.Strings(tagList)
