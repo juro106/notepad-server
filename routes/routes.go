@@ -21,18 +21,17 @@ func Setup(app *fiber.App) {
 	// Get local use middleware
 	auth := v1.Use(middleware.IsAuthenticate)
 	auth.Get("projects-list", controllers.GetProjects)
-	auth.Get("pages/:projects/", controllers.GetContentsAll)
-	auth.Get("pages/:projects/:slug", controllers.GetContents)
-	auth.Get("related/:projects/:slug", controllers.GetRelated)
+	auth.Get("pages/:project/", controllers.GetContentsAll)
+	auth.Get("pages/:project/:slug", controllers.GetContents)
+	auth.Get("related/:project/:slug", controllers.GetRelated)
+	auth.Get("tags/:project", controllers.GetTags)
 
-	v1.Get("show", controllers.Show)
 	// get images
 	v1.Get("images/:project/all", controllers.GetImages)
 
 	// Post
 	// auth.Post("get-content", controllers.GetContent)
 	// auth.Post("get-contents-all", controllers.GetContentsAll)
-	v1.Post("post", controllers.Post)
 	v1.Post("create-table", controllers.CreateTable)
 	v1.Post("post-content", controllers.PostContent)
 	v1.Post("get-related-only", controllers.GetRelatedOnly)

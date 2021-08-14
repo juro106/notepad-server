@@ -1,13 +1,9 @@
 package controllers
 
 import (
-	"bytes"
-	"database/sql/driver"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"notepad/database"
@@ -19,76 +15,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-func makeImageDir(dir string) {
-	dirname := "./images/" + dir
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		os.Mkdir(dirname, 0777)
-	}
-}
-
-type JsonObject map[string]interface{}
-
-func (j *JsonObject) Scan(src interface{}) error {
-	var _src []byte
-	switch src.(type) {
-	case []byte:
-		_src = src.([]byte)
-	default:
-		return errors.New("failed to scan JsonObject")
-	}
-	if err := json.NewDecoder(bytes.NewReader(_src)).Decode(j); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (j JsonObject) Value() (driver.Value, error) {
-	b := make([]byte, 0)
-	buf := bytes.NewBuffer(b)
-	if err := json.NewEncoder(buf).Encode(j); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func GetContent(ctx *fiber.Ctx) error {
-
-	db := database.DbConn()
-	var query models.Query
-
-	if err := ctx.BodyParser(&query); err != nil {
-		log.Println(err)
-		return err
-	}
-	// fmt.Println("query", query)
-
-	var tableName string
-	var defaultUser = os.Getenv("DEFAULT_USER")
-	if len(query.Uid) > 0 {
-		tableName = query.Uid
-	} else {
-		tableName = defaultUser
-	}
-	// table := "posts3"
-	stmt := `SELECT data FROM ` + tableName + ` WHERE slug = ?`
-	// fmt.Println(stmt)
-	var j JsonObject
-	err := db.QueryRow(stmt, query.Slug).Scan(&j)
-	if err != nil {
-		log.Println(err)
-	}
-	// stmt2 := `SELECT updated_at, data FROM ` + tableName + ` WHERE slug = ?`
-	stmt2 := `SELECT json_object('updated_at', updated_at, 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags') FROM ` + tableName + ` WHERE slug = ?`
-	// fmt.Println(stmt2)
-	var j2 JsonObject
-	err = db.QueryRow(stmt2, query.Slug).Scan(&j2)
-	if err != nil {
-		log.Println(err)
-	}
-
-	// fmt.Println(j)
-	return ctx.JSON(j2)
-}
+// method: post
 
 func CreateTable(c *fiber.Ctx) error {
 	db := database.DbConn()
@@ -107,7 +34,11 @@ func CreateTable(c *fiber.Ctx) error {
         data json,
         PRIMARY KEY (slug))`
 	// fmt.Println(content)
+
 	_, err := db.Exec(stmt)
+
+	// // 認証情報に新しいテーブルを追加
+	// middleware.IsAuthenticate(c)
 
 	// 画像ディレクトリも一緒に作成
 	makeImageDir(name.Name)
@@ -137,12 +68,6 @@ func CreateTable(c *fiber.Ctx) error {
 	}
 }
 
-func GetContentN(ctx *fiber.Ctx) error {
-	msg := ctx.Params("projects") + ctx.Params("slug")
-
-	return ctx.SendString("project & slug: " + msg)
-}
-
 func PostContent(ctx *fiber.Ctx) error {
 	db := database.DbConn()
 	var content models.Content
@@ -151,7 +76,7 @@ func PostContent(ctx *fiber.Ctx) error {
 		log.Println(err)
 		return err
 	}
-	stmt := `INSERT INTO ` + content.Project + ` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`
+	stmt := "INSERT INTO `" + content.Project + "` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)"
 	i, err := db.Prepare(stmt)
 	if err != nil {
 		fmt.Println("error: ", i)
@@ -174,7 +99,7 @@ func PostContent(ctx *fiber.Ctx) error {
 	// fmt.Println(r)
 
 	for _, v := range content.Tags {
-		stmt2 := `INSERT INTO ` + content.Project + ` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)`
+		stmt2 := "INSERT INTO `" + content.Project + "` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)"
 		i, err := db.Prepare(stmt2)
 		if err != nil {
 			log.Print(err)
@@ -200,7 +125,7 @@ func PostContent(ctx *fiber.Ctx) error {
 	}
 
 	var u string
-	stmt4 := `SELECT updated_at FROM ` + content.Project + ` WHERE slug = ?`
+	stmt4 := "SELECT updated_at FROM `" + content.Project + "` WHERE slug = ?"
 	err = db.QueryRow(stmt4, content.Slug).Scan(&u)
 	if err != nil {
 		log.Println(err)
@@ -212,36 +137,6 @@ func PostContent(ctx *fiber.Ctx) error {
 	return ctx.JSON(message)
 }
 
-func Post(ctx *fiber.Ctx) error {
-	db := database.DbConn()
-	var member models.Member
-
-	if err := ctx.BodyParser(&member); err != nil {
-		return err
-	}
-
-	fmt.Println(member)
-
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS music(id INT, name VARCHAR(200), product VARCHAR(200), PRIMARY KEY(id))`)
-	if err != nil {
-		fmt.Println("cannot create table")
-	}
-
-	ins, err := db.Prepare("INSERT INTO music (name, product) VALUES(?, ?)")
-	if err != nil {
-		log.Println(err)
-	}
-	defer ins.Close()
-
-	ret, err := ins.Exec(&member.Name, &member.Product)
-	if err != nil {
-		log.Println(err)
-	}
-	fmt.Println(ret)
-
-	return ctx.JSON(member)
-}
-
 func DeleteContent(ctx *fiber.Ctx) error {
 	db := database.DbConn()
 	var query models.Query
@@ -251,7 +146,7 @@ func DeleteContent(ctx *fiber.Ctx) error {
 	}
 	tableName := query.Project
 	fmt.Println(query)
-	stmt := `DELETE FROM ` + tableName + ` WHERE slug = ?`
+	stmt := "DELETE FROM `" + tableName + "` WHERE slug = ?"
 	p, err := db.Prepare(stmt)
 	if err != nil {
 		log.Println(err)

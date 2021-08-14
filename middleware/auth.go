@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"notepad/database"
 
 	firebase "firebase.google.com/go"
 	"github.com/gofiber/fiber/v2"
@@ -41,28 +42,56 @@ func GetUID(c *fiber.Ctx) (string, error) {
 	return token.UID, nil
 }
 
+// sessino にユーザーの情報を登録
 func SetUserInfo(c *fiber.Ctx) error {
 	fmt.Println("SetUserInfo")
-	uid, err := GetUID(c)
-	fmt.Println("SetUserInfo -> uid", uid)
 
+	uid, err := GetUID(c)
+	if err != nil {
+		log.Fatalf("session err %v\n", err)
+	}
+
+	// session store
 	sess, err := store.Get(c)
 	if err != nil {
 		log.Fatalf("session err %v\n", err)
 	}
 
+	// register uid
+	fmt.Println("SetUserInfo -> uid", uid)
 	sess.Set("name", uid)
-	// name := sess.Get("name")
-	// fmt.Println("SetUserInfo -> name", name)
+
+	// register projects
+	db := database.DbConn()
+	stmt := `SELECT name FROM projects WHERE owner = ?`
+
+	p, err := db.Prepare(stmt)
+	if err != nil {
+		log.Println("preparedstatement error", err)
+	}
+	defer p.Close()
+
+	rows, err := p.Query(uid)
+	var js []string
+	if err != nil {
+		log.Println("rows error", err)
+		return c.JSON(js)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var j string
+		if err := rows.Scan(&j); err != nil {
+			log.Println(err)
+		}
+		js = append(js, j)
+	}
+	sess.Set("projects", js)
 
 	sid := sess.ID()
 	if err := sess.Save(); err != nil {
 		panic(err)
 	}
-	//
-	// fmt.Printf("sid %+v\n", sid)
-	// fmt.Printf("sess %+v\n", sess)
-	// log.Printf("uid: %v\n", uid)
 
 	return c.JSON(sid)
 }
@@ -81,20 +110,26 @@ func Logout(c *fiber.Ctx) error {
 func IsAuthenticate(c *fiber.Ctx) error {
 	// cookie に紐付いた セッション変数の uid をチェックする
 	// uid, err := GetUID(c)
-	fmt.Println("use middleware")
+	// fmt.Println("use middleware")
 	sess, err := store.Get(c)
 	if err != nil {
 		log.Fatalf("session err %v\n", err)
 	}
+
 	// c.Cookies("name")
 	// cid := c.Cookies("cid")
 	// fmt.Printf("middleware cid:%+v\n", cid)
 
 	name := sess.Get("name")
-	fmt.Printf("middleware IsAuthenticate session name uid:%+v\n", name)
+	log.Printf("middleware IsAuthenticate session name uid:%+v\n", name)
 	if name == nil {
-		return c.JSON(fiber.Map{"message": "認証エラー"})
+		return c.JSON(fiber.Map{"message": "uid 認証エラー"})
 	}
+
+	// 現在のユーザーが保持しているプロジェクト一覧を取得
+	// 他のユーザーのprojectsを見られないようにするチェック用。
+	projects := sess.Get("projects").([]string)
+	c.Locals("userProjects", projects)
 
 	return c.Next()
 }
