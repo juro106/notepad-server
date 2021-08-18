@@ -99,7 +99,7 @@ func PostContent(ctx *fiber.Ctx) error {
 	// fmt.Println(r)
 
 	for _, v := range content.Tags {
-		stmt2 := "INSERT INTO `" + content.Project + "` (slug, data) VALUES(?, ?) ON DUPLICATE KEY UPDATE data = VALUES(data)"
+		stmt2 := "INSERT INTO `" + content.Project + "` (slug, data) VALUES(?, ?)"
 		i, err := db.Prepare(stmt2)
 		if err != nil {
 			log.Print(err)
@@ -120,7 +120,6 @@ func PostContent(ctx *fiber.Ctx) error {
 		if err != nil {
 			fmt.Println("error: ", r)
 			log.Println(err)
-			return err
 		}
 	}
 

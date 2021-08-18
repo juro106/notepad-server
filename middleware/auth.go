@@ -44,7 +44,7 @@ func GetUID(c *fiber.Ctx) (string, error) {
 
 // sessino にユーザーの情報を登録
 func SetUserInfo(c *fiber.Ctx) error {
-	fmt.Println("SetUserInfo")
+	fmt.Println("start SetUserInfo")
 
 	uid, err := GetUID(c)
 	if err != nil {
@@ -108,9 +108,9 @@ func Logout(c *fiber.Ctx) error {
 }
 
 func IsAuthenticate(c *fiber.Ctx) error {
+	fmt.Println("use middleware start IsAuthenticate")
 	// cookie に紐付いた セッション変数の uid をチェックする
 	// uid, err := GetUID(c)
-	// fmt.Println("use middleware")
 	sess, err := store.Get(c)
 	if err != nil {
 		log.Fatalf("session err %v\n", err)
