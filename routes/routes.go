@@ -15,7 +15,7 @@ func Setup(app *fiber.App) {
 	v1.Get("secret/userinfo", middleware.SetUserInfo)
 	v1.Get("secret/logout", middleware.Logout)
 	// Get public
-	v1.Get("public/contents-all", controllers.GetContentsAllPublic)
+	v1.Get("public/contents-all:srot?", controllers.GetContentsAllPublic)
 	v1.Get("public/tags-all", controllers.GetTagsPublic)
 	v1.Get("public/:slug", controllers.GetContentsPublic)
 	v1.Get("public/related/:slug", controllers.GetRelatedPublic)

@@ -20,7 +20,7 @@ import (
 // 共通処理
 func GetContents(tableName, slug string) (error ContentObject) {
 	db := database.DbConn()
-	stmt := `SELECT json_object('updated_at', date_format(updated_at, '%Y-%m-%dT%T+09:00'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM ` + tableName + ` WHERE slug = ?`
+	stmt := `SELECT json_object('created_at', date_format(created_at, '%Y-%m-%dT%T+09:00'), 'updated_at', date_format(updated_at, '%Y-%m-%dT%T+09:00'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM ` + tableName + ` WHERE slug = ?`
 	// fmt.Println(stmt2)
 	var j ContentObject
 	if err := db.QueryRow(stmt, slug).Scan(&j); err != nil {
@@ -31,9 +31,15 @@ func GetContents(tableName, slug string) (error ContentObject) {
 	return j
 }
 
-func GetContentsAll(tableName string) (error []ContentObject) {
+func GetContentsAll(tableName, sort string) (error []ContentObject) {
 	db := database.DbConn()
-	stmt := "SELECT json_object('updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM `" + tableName + "` ORDER BY updated_at DESC"
+	sort_by := "updated_at DESC"
+	if len(sort) != 0 {
+		sort_by = sort + " DESC"
+	}
+
+	stmt := "SELECT json_object('created_at', date_format(created_at, '%Y-%m-%dT%T+09:00'), 'updated_at', date_format(updated_at, '%Y-%m-%dT%T+09:00'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM `" + tableName + "` ORDER BY " + sort_by
+
 	rows, err := db.Query(stmt)
 	var js []ContentObject
 	if err != nil {
@@ -59,7 +65,7 @@ func GetRelated(tableName, slug string) (error []map[string][]ContentObject) {
 	// var defaultUser = os.Getenv("DEFAULT_USER") // ※public用の処理で使う予定
 	// とあるタグ名(リクエストされたslug)を指定している記事を収集
 	// stmt := "SELECT data FROM `" + tableName + "` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')"
-	stmt := "SELECT json_object('updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM `" + tableName + "` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags') ORDER BY updated_at DESC"
+	stmt := "SELECT json_object('created_at', date_format(created_at, '%Y-%m-%d'), 'updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM `" + tableName + "` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags') ORDER BY updated_at DESC"
 
 	p, err := db.Prepare(stmt)
 	if err != nil {
@@ -105,7 +111,7 @@ func GetRelated(tableName, slug string) (error []map[string][]ContentObject) {
 			var jslist []ContentObject
 			// stmt := "SELECT data FROM `" + tableName + "` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags') ORDER BY updated_at DESC"
 			// SELECT * FROM public WHERE JSON_CONTAINS(data, '"image"', '$.tags') ORDER BY updated_at DESC
-			stmt = "SELECT json_object('updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM `" + tableName + "` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags') ORDER BY updated_at DESC"
+			stmt = "SELECT json_object('created_at', date_format(created_at, '%Y-%m-%d'), 'updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM `" + tableName + "` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags') ORDER BY updated_at DESC"
 			p, err := db.Prepare(stmt)
 			if err != nil {
 				log.Println(err)
@@ -216,6 +222,12 @@ func GetContentsLocal(c *fiber.Ctx) error {
 func GetContentsAllLocal(c *fiber.Ctx) error {
 	// db := database.DbConn()
 	tableName := c.Params("project")
+	// https://docs.gofiber.io/api/ctx#query
+	// fmt.Printf("query key %+v\n", c.Query("sort_by"))
+	sort := c.Query("sort_by")
+	// https://docs.gofiber.io/api/ctx#context Context() *fasthttp.RequestCtx
+	// sort := string(c.Context().QueryArgs().Peek("sort_by"))
+
 	tableName, err := url.QueryUnescape(tableName)
 	if err != nil {
 		log.Println(err)
@@ -226,7 +238,7 @@ func GetContentsAllLocal(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).SendString("Sorry can't find that!")
 	}
 
-	js := GetContentsAll(tableName)
+	js := GetContentsAll(tableName, sort)
 
 	return c.JSON(js)
 }
@@ -415,7 +427,10 @@ func GetContentsPublic(c *fiber.Ctx) error {
 
 func GetContentsAllPublic(c *fiber.Ctx) error {
 	tableName := os.Getenv("DEFAULT_TABLE")
-	js := GetContentsAll(tableName)
+	// https://docs.gofiber.io/api/ctx#context Context() *fasthttp.RequestCtx
+	// sort := string(c.Request().URI().QueryString()) <- this is ok too.
+	sort := c.Query("sort_by")
+	js := GetContentsAll(tableName, sort)
 	// fmt.Println(js)
 	return c.JSON(js)
 }
