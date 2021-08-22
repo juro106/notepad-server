@@ -92,8 +92,9 @@ func (t *TagsObject) Scan(src interface{}) error {
 }
 
 type TagNumObject struct {
-	Name   string `json:"name"`
-	Number int    `json:"number"`
+	Name    string `json:"name"`
+	Number  int    `json:"number"`
+	Project string `json:"project"`
 }
 
 func (t *TagNumObject) Scan(src interface{}) error {

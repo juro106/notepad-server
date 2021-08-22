@@ -20,7 +20,7 @@ import (
 // 共通処理
 func GetContents(tableName, slug string) (error ContentObject) {
 	db := database.DbConn()
-	stmt := `SELECT json_object('created_at', date_format(created_at, '%Y-%m-%dT%T+09:00'), 'updated_at', date_format(updated_at, '%Y-%m-%dT%T+09:00'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM ` + tableName + ` WHERE slug = ?`
+	stmt := `SELECT json_object('created_at', date_format(created_at, '%Y-%m-%dT%T+09:00'), 'updated_at', date_format(updated_at, '%Y-%m-%dT%T+09:00'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image', 'project', data->'$.project') FROM ` + tableName + ` WHERE slug = ?`
 	// fmt.Println(stmt2)
 	var j ContentObject
 	if err := db.QueryRow(stmt, slug).Scan(&j); err != nil {
@@ -38,7 +38,7 @@ func GetContentsAll(tableName, sort string) (error []ContentObject) {
 		sort_by = sort + " DESC"
 	}
 
-	stmt := "SELECT json_object('created_at', date_format(created_at, '%Y-%m-%dT%T+09:00'), 'updated_at', date_format(updated_at, '%Y-%m-%dT%T+09:00'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM `" + tableName + "` ORDER BY " + sort_by
+	stmt := "SELECT json_object('created_at', date_format(created_at, '%Y-%m-%dT%T+09:00'), 'updated_at', date_format(updated_at, '%Y-%m-%dT%T+09:00'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image', 'project', data->'$.project') FROM `" + tableName + "` ORDER BY " + sort_by
 
 	rows, err := db.Query(stmt)
 	var js []ContentObject
@@ -65,7 +65,7 @@ func GetRelated(tableName, slug string) (error []map[string][]ContentObject) {
 	// var defaultUser = os.Getenv("DEFAULT_USER") // ※public用の処理で使う予定
 	// とあるタグ名(リクエストされたslug)を指定している記事を収集
 	// stmt := "SELECT data FROM `" + tableName + "` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags')"
-	stmt := "SELECT json_object('created_at', date_format(created_at, '%Y-%m-%d'), 'updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM `" + tableName + "` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags') ORDER BY updated_at DESC"
+	stmt := "SELECT json_object('created_at', date_format(created_at, '%Y-%m-%d'), 'updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image', 'project', data->'$.project') FROM `" + tableName + "` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags') ORDER BY updated_at DESC"
 
 	p, err := db.Prepare(stmt)
 	if err != nil {
@@ -111,7 +111,7 @@ func GetRelated(tableName, slug string) (error []map[string][]ContentObject) {
 			var jslist []ContentObject
 			// stmt := "SELECT data FROM `" + tableName + "` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags') ORDER BY updated_at DESC"
 			// SELECT * FROM public WHERE JSON_CONTAINS(data, '"image"', '$.tags') ORDER BY updated_at DESC
-			stmt = "SELECT json_object('created_at', date_format(created_at, '%Y-%m-%d'), 'updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image') FROM `" + tableName + "` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags') ORDER BY updated_at DESC"
+			stmt = "SELECT json_object('created_at', date_format(created_at, '%Y-%m-%d'), 'updated_at', date_format(updated_at, '%Y-%m-%d'), 'slug', data->'$.slug', 'user', data->'$.user', 'content', data->'$.content', 'title', data->'$.title', 'tags', data->'$.tags', 'image', data->'$.image', 'project', data->'$.project') FROM `" + tableName + "` WHERE JSON_CONTAINS(data, CAST(? AS JSON), '$.tags') ORDER BY updated_at DESC"
 			p, err := db.Prepare(stmt)
 			if err != nil {
 				log.Println(err)
@@ -188,8 +188,9 @@ func GetTags(tableName string) (error []TagNumObject) {
 			log.Println(err)
 		}
 		t := TagNumObject{
-			Name:   v,
-			Number: num,
+			Name:    v,
+			Number:  num,
+			Project: tableName,
 		}
 		tagNumList = append(tagNumList, t)
 	}
