@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"notepad/database"
+	"notepad/middleware"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
@@ -43,7 +44,7 @@ func DeleteProject(c *fiber.Ctx) error {
 		log.Println(err)
 		return err
 	}
-	log.Println("delete ", projectName, " in projects table")
+	log.Println("delete ", projectName, " from projectsTable")
 	// テーブルを削除
 	stmt2 := `DROP TABLE IF EXISTS ` + projectName
 	p2, err := db.Prepare(stmt2)
@@ -64,6 +65,8 @@ func DeleteProject(c *fiber.Ctx) error {
 		log.Println(err)
 	}
 	log.Println("delete images directory:", projectName)
+
+	middleware.DeleteProjectInTheSession(c, projectName)
 
 	return c.JSON(fiber.Map{"status": 201, "message": "success", "data": projectName})
 }

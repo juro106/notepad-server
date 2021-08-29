@@ -28,15 +28,15 @@ func Setup(app *fiber.App) {
 	auth.Get("tags/:project", controllers.GetTagsLocal)
 
 	// get images
-	v1.Get("images/:project/all", controllers.GetImages)
+	auth.Get("images/:project/all", controllers.GetImages)
 
 	// Post
 	// auth.Post("get-content", controllers.GetContent)
 	// auth.Post("get-contents-all", controllers.GetContentsAll)
-	v1.Post("create-table", controllers.CreateTable)
-	v1.Post("post-content", controllers.PostContent)
-	v1.Post("get-related-only", controllers.GetRelatedOnly)
-	v1.Post("delete-content", controllers.DeleteContent)
+	auth.Post("create-table", controllers.CreateTable)
+	auth.Post("post-content", controllers.PostContent)
+	auth.Post("get-related-only", controllers.GetRelatedOnly)
+	auth.Post("delete-content", controllers.DeleteContent)
 
 	auth.Post("images/upload", controllers.UploadImage)
 	auth.Delete("images/:project/:filename", controllers.DeleteImage)

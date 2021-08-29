@@ -19,8 +19,8 @@ var store = session.New(session.Config{
 })
 
 func GetUID(c *fiber.Ctx) (string, error) {
-	fmt.Println("store", store)
-	fmt.Println("middleware GetUID")
+	// fmt.Printf("store%+v\n", &store)
+	log.Println("GetUID(middleware)")
 	app, err := firebase.NewApp(context.Background(), nil)
 	if err != nil {
 		log.Fatalf("error initializing app: %v\n", err)
@@ -37,14 +37,14 @@ func GetUID(c *fiber.Ctx) (string, error) {
 	if err != nil {
 		log.Fatalf("middleware auth error verifying ID token: %v\n", err)
 	}
-	fmt.Println("middleware token.UID", token.UID)
+	log.Println("get token.UID(middleware)", token.UID)
 
 	return token.UID, nil
 }
 
 // sessino にユーザーの情報を登録
 func SetUserInfo(c *fiber.Ctx) error {
-	fmt.Println("start SetUserInfo")
+	log.Println("start SetUserInfo")
 
 	uid, err := GetUID(c)
 	if err != nil {
@@ -58,7 +58,7 @@ func SetUserInfo(c *fiber.Ctx) error {
 	}
 
 	// register uid
-	fmt.Println("SetUserInfo -> uid", uid)
+	log.Println("SetUserInfo -> uid", uid)
 	sess.Set("name", uid)
 
 	// register projects
@@ -108,7 +108,7 @@ func Logout(c *fiber.Ctx) error {
 }
 
 func IsAuthenticate(c *fiber.Ctx) error {
-	fmt.Println("use middleware start IsAuthenticate")
+	log.Println("IsAuthenticate(middleware)")
 	// cookie に紐付いた セッション変数の uid をチェックする
 	// uid, err := GetUID(c)
 	sess, err := store.Get(c)
@@ -121,7 +121,7 @@ func IsAuthenticate(c *fiber.Ctx) error {
 	// fmt.Printf("middleware cid:%+v\n", cid)
 
 	name := sess.Get("name")
-	log.Printf("middleware IsAuthenticate session name uid:%+v\n", name)
+	log.Printf("IsAuthenticate get session name => uid:%+v\n", name)
 	if name == nil {
 		return c.JSON(fiber.Map{"message": "uid 認証エラー"})
 	}
@@ -131,22 +131,72 @@ func IsAuthenticate(c *fiber.Ctx) error {
 	projects := sess.Get("projects").([]string)
 	c.Locals("userProjects", projects)
 
+	// fmt.Printf("Current userProjects list=>%+v\n", projects)
+
 	return c.Next()
 }
 
 func GetSessionUID(c *fiber.Ctx) string {
-	fmt.Println("use middleware")
+	log.Println("GetSessionID(middleware)")
 	sess, err := store.Get(c)
 	if err != nil {
 		log.Fatalf("session err %v\n", err)
 	}
 	c.Cookies("name")
 	cid := c.Cookies("cid")
-	fmt.Printf("middleware cid:%+v\n", cid)
+	log.Printf("cid:%+v\n", cid)
 
 	name := sess.Get("name")
-	fmt.Printf("middleware GetSessionUID session name uid:%+v\n", name)
+	log.Printf("GetSessionUID session name uid:%+v\n", name)
 	nameStr := fmt.Sprintf("%s", name)
 
 	return nameStr
+}
+
+type TableNameObject struct {
+	Name string `json:"name"`
+}
+
+func AddProjectInTheSession(c *fiber.Ctx, t string) error {
+	log.Println("AddTable")
+	sess, err := store.Get(c)
+	if err != nil {
+		log.Fatalf("session err %v\n", err)
+	}
+
+	projects := sess.Get("projects").([]string)
+	projects = append(projects, t)
+	sess.Set("projects", projects)
+	// c.Locals("userProjects", projects)
+	//
+	// current := sess.Get("projects").([]string)
+	// fmt.Printf("added userProjects list=>%+v\n", current)
+	if err := sess.Save(); err != nil {
+		panic(err)
+	}
+
+	return nil
+}
+
+func DeleteProjectInTheSession(c *fiber.Ctx, t string) error {
+	log.Println("DeleteTable")
+	sess, err := store.Get(c)
+	if err != nil {
+		log.Fatalf("session err %v\n", err)
+	}
+
+	newSlice := []string{}
+	projects := sess.Get("projects").([]string)
+	for _, v := range projects {
+		if v != t {
+			newSlice = append(newSlice, v)
+		}
+	}
+	sess.Set("projects", newSlice)
+
+	if err := sess.Save(); err != nil {
+		panic(err)
+	}
+
+	return nil
 }

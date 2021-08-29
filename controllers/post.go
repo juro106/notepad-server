@@ -37,9 +37,6 @@ func CreateTable(c *fiber.Ctx) error {
 
 	_, err := db.Exec(stmt)
 
-	// // 認証情報に新しいテーブルを追加
-	// middleware.IsAuthenticate(c)
-
 	// 画像ディレクトリも一緒に作成
 	makeImageDir(name.Name)
 
@@ -54,6 +51,9 @@ func CreateTable(c *fiber.Ctx) error {
 		log.Println(err)
 	}
 	fmt.Println(ret)
+
+	// 認証情報に新しいテーブルを追加
+	middleware.AddProjectInTheSession(c, name.Name)
 
 	var message models.Message
 	t := fmt.Sprintf("%s", time.Now())
